@@ -44,22 +44,21 @@ setup() {
     # Set $psvar[12] to the current Python virtualenv or spack env
     function _prompt_update_env() {
         psvar[12]=
-        local env_strings=()
+        local env_names=()
 
         # Python
         if [[ -n $VIRTUAL_ENV ]] && [[ -n $VIRTUAL_ENV_DISABLE_PROMPT ]]; then
-            env_strings+="${VIRTUAL_ENV:t}"
+            env_names+="${VIRTUAL_ENV:t}"
         fi
 
-        # Check for Spack environment
+        # spack
         if [[ -n $SPACK_ENV ]]; then
-            # Extract the environment name from SPACK_ENV path
-            env_strings+="s:${SPACK_ENV:t}"
+            env_names+="s:${SPACK_ENV:t}"
         fi
 
-        # Join environment strings with a separator if both are present
-        if (( ${#env_strings[@]} > 0 )); then
-            psvar[12]="${(j: | :)env_strings}"
+        # Join environment names with a separator if both are present
+        if (( ${#env_names[@]} > 0 )); then
+            psvar[12]="${(j: | :)env_names}"
         fi
     }
 
