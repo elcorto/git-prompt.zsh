@@ -29,6 +29,7 @@ autoload -U colors && colors
 : "${ZSH_GIT_PROMPT_ENABLE_SECONDARY=""}"
 : "${ZSH_GIT_PROMPT_NO_ASYNC=""}"
 : "${ZSH_GIT_PROMPT_FORCE_BLANK=""}"
+: "${ZSH_GIT_PROMPT_TIMEOUT=""}"
 : "${ZSH_GIT_PROMPT_AWK_CMD=""}"
 
 # Theming
@@ -73,11 +74,39 @@ setopt PROMPT_SUBST
 (( $+commands[nawk] ))  &&  : "${ZSH_GIT_PROMPT_AWK_CMD:=nawk}"
                             : "${ZSH_GIT_PROMPT_AWK_CMD:=awk}"
 
+# Resolve timeout command for slow filesystem support.
+# Prefer GNU timeout / gtimeout (macOS coreutils), fall back to pure zsh.
+if (( $+commands[timeout] )); then
+    _ZSH_GIT_PROMPT_TIMEOUT_CMD="timeout"
+elif (( $+commands[gtimeout] )); then
+    _ZSH_GIT_PROMPT_TIMEOUT_CMD="gtimeout"
+else
+    _ZSH_GIT_PROMPT_TIMEOUT_CMD=""
+fi
+
+# Run a command with an optional timeout. When ZSH_GIT_PROMPT_TIMEOUT is
+# empty (the default), the command is executed directly with no timeout.
+_zsh_git_prompt_with_timeout() {
+    if [[ -n "$ZSH_GIT_PROMPT_TIMEOUT" ]]; then
+        if [[ -n "$_ZSH_GIT_PROMPT_TIMEOUT_CMD" ]]; then
+            command "$_ZSH_GIT_PROMPT_TIMEOUT_CMD" "$ZSH_GIT_PROMPT_TIMEOUT" "$@"
+            return $?
+        fi
+        # Pure zsh fallback: run command in background with a watchdog
+        "$@" &
+        local cmd_pid=$!
+        ( sleep "$ZSH_GIT_PROMPT_TIMEOUT" && kill -TERM $cmd_pid 2>/dev/null ) &!
+        wait $cmd_pid 2>/dev/null
+        return $?
+    fi
+    "$@"
+}
+
 # Use --show-stash for git versions newer than 2.35.0
 _zsh_git_prompt_git_version=$(command git version)
 if [[ "${_zsh_git_prompt_git_version:12}" == 2.<35->.<-> ]]; then
     _zsh_git_prompt_git_cmd() {
-        GIT_OPTIONAL_LOCKS=0 command git status --show-stash --branch --porcelain=v2 2>&1 \
+        GIT_OPTIONAL_LOCKS=0 _zsh_git_prompt_with_timeout git status --show-stash --branch --porcelain=v2 2>&1 \
             || echo "fatal: git command failed"
     }
 else
@@ -86,7 +115,7 @@ else
             c=$(command git rev-list --walk-reflogs --count refs/stash 2> /dev/null)
             [[ -n "$c" ]] && echo "# stash $c"
         )
-        GIT_OPTIONAL_LOCKS=0 command git status --branch --porcelain=v2 2>&1 \
+        GIT_OPTIONAL_LOCKS=0 _zsh_git_prompt_with_timeout git status --branch --porcelain=v2 2>&1 \
             || echo "fatal: git command failed"
     }
 fi
