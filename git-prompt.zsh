@@ -336,11 +336,15 @@ function _zsh_git_prompt_async_request() {
             # Send the signal to the process group to kill any processes that may
             # have been forked by the suggestion strategy
             kill -TERM -$_ZSH_GIT_PROMPT_ASYNC_PID 2>/dev/null
+            # Best-effort SIGKILL fallback for processes stuck in
+            # uninterruptible I/O (e.g. NFS)
+            { sleep 1 && kill -KILL -$_ZSH_GIT_PROMPT_ASYNC_PID 2>/dev/null } &!
         else
             # Kill just the child process since it wasn't placed in a new process
             # group. If the suggestion strategy forked any child processes they may
             # be orphaned and left behind.
             kill -TERM $_ZSH_GIT_PROMPT_ASYNC_PID 2>/dev/null
+            { sleep 1 && kill -KILL $_ZSH_GIT_PROMPT_ASYNC_PID 2>/dev/null } &!
         fi
     fi
 
